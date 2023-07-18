@@ -1,76 +1,3 @@
-<<<<<<< HEAD
-use minify_html;
-use std::fs::{self, File};
-use std::io::{Read, Write};
-use std::net::{TcpListener, TcpStream};
-use std::path::Path;
-use std::thread;
-
-pub struct HTML;
-
-impl HTML {
-    pub fn build(content: &String) {
-        fn export(content: String) -> std::io::Result<()> {
-            let dest = Path::new("./dest");
-            if dest.exists() {
-                println!("Overriding old release");
-                if fs::remove_dir_all(dest).is_err() {
-                    eprintln!("Error removing destination");
-                }
-            }
-            fs::create_dir(dest)?;
-
-            let path = "./dest/index.html";
-            let mut output_file = File::create(path)?;
-
-            let cfg = minify_html::Cfg::new();
-            cfg.minify_css;
-            cfg.keep_closing_tags;
-
-            let code: &[u8] = content.as_bytes();
-            let compacted = minify_html::minify(code, &cfg);
-            write!(
-                output_file,
-                "{}",
-                String::from_utf8(compacted).expect("error")
-            )?;
-            println!("html Built!");
-            Ok(())
-        }
-
-        if let Err(e) = export(content.to_string()) {
-            eprintln!("{:?}", e);
-        }
-    }
-    fn handle_request(mut stream: TcpStream, content: String) {
-        let mut buffer = [0; 1024];
-        stream.read(&mut buffer).unwrap();
-
-        let response = format!(
-            "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n{}",
-            content
-        );
-        stream.write_all(response.as_bytes()).unwrap();
-        stream.flush().unwrap();
-    }
-
-    pub fn start(content: String, bind: &str, port: &str) {
-        let listener = TcpListener::bind(format!("{}:{}", bind, port)).unwrap();
-        println!("Server listening on http://{}:{}!", bind, port);
-
-        for stream in listener.incoming() {
-            let stream = stream.unwrap();
-
-            let content = content.clone();
-            thread::spawn(move || {
-                HTML::handle_request(stream, content.clone());
-            });
-        }
-    }
-}
-pub fn external_body(path: &str) -> String {
-    let cat = File::open(path);
-=======
 pub mod rust_to_html;
 use std::{
     fs::{self, File},
@@ -276,7 +203,6 @@ pub fn include_html(path: impl Into<String> + std::convert::AsRef<std::path::Pat
     let binding = path.into();
     let pth = Path::new(&binding);
     let cat = File::open(pth);
->>>>>>> master
     match cat {
         Ok(mut file) => {
             let mut file_contents = String::new();
@@ -284,7 +210,6 @@ pub fn include_html(path: impl Into<String> + std::convert::AsRef<std::path::Pat
                 eprintln!("Error reading file: {}", error);
             }
 
-<<<<<<< HEAD
             // Print the file contents
             return file_contents;
         }
@@ -395,20 +320,3 @@ pub fn a(class: Option<&str>, href: &str, value: &str, style: Option<&str>) -> S
 pub fn script(script: &str) -> String {
     script.to_string()
 }
-=======
-            return file_contents;
-        }
-        Err(e) => {
-            return format!(
-                "
-                <div style='text-align: center; font-family: sans-serif;'>
-                    <h1 style='margin: auto; background: red; border-radius: 5px; padding: 5px; color: white;'>Error reading your file!</h1>
-                    <h2>Cannot find {}<br></h2>
-                    <p>{}</p>
-                </div>",
-                &binding, e,
-            );
-        }
-    }
-}
->>>>>>> master

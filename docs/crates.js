@@ -1,1 +1,1 @@
-window.ALL_CRATES = ["html"];
+window.ALL_CRATES = ["libwizard"];
