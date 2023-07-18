@@ -1,19 +1,69 @@
-pub mod html_to_rs;
-use std::collections::linked_list;
-use std::fs::File;
-use std::io::{Read, Write};
-use std::net::{TcpListener, TcpStream};
-use std::path::Path;
-use std::sync::{Arc, Mutex};
-use std::thread;
+pub mod rust_to_html;
+use std::{
+    fs::{self, File},
+    io::{Read, Write},
+    net::{TcpListener, TcpStream},
+    path::Path,
+    thread,
+};
+use owo_colors::OwoColorize;
+
+pub trait Debug {
+    fn debug(&self);
+}
+    
 
 pub struct Server {
     host: String,
     port: u32,
 }
 
+
 pub struct ServerResponse {
     content: String,
+}
+pub struct StyleResponse {
+    content: String,
+}
+#[derive(Clone)]
+pub struct CustomRoutes {
+    pub path: String,
+    pub content_type: String,
+    pub response: String,
+    pub styles: Option<String>
+}
+
+
+impl CustomRoutes {
+    pub fn new(
+        path: impl Into<String>,
+        content_type: impl Into<String>,
+        response: impl Into<String>,
+        css_file: Option<impl Into<String>>,
+    ) -> Self {
+        Self {
+            path: path.into(),
+            content_type: content_type.into(),
+            response: response.into(),
+            styles: css_file.map(Into::into),
+        }
+    }
+
+    pub fn include_css(&self) -> Option<String> {
+        if let Some(styles) = &self.styles {
+            // Load the CSS from the file and return it
+            match fs::read_to_string(styles) {
+                Ok(css) => Some(css),
+                Err(e) => {
+                    eprintln!("Error reading CSS file: {}", e);
+                    None
+                }
+            }
+        } else {
+            // No CSS file specified, return None
+            None
+        }
+    }
 }
 
 impl Server {
@@ -24,34 +74,66 @@ impl Server {
         }
     }
 
-    pub fn start(&self, content: ServerResponse) {
-        fn handle_client(mut stream: TcpStream, content: String) {
+    pub fn start(&self, content: ServerResponse, style: StyleResponse, custom_routes: Vec<CustomRoutes>,) {
+        let routes = custom_routes.clone();
+        fn handle_client(mut stream: TcpStream, content: String, style: String, custom_routes: Vec<CustomRoutes>,) {
             let mut buffer = [0; 1024];
+            let css_content = load_css_from_file(&style);
             match stream.read(&mut buffer) {
                 Ok(_) => {
-                    let response = format!("HTTP/1.1 200 OK\r\n\r\n{}", content);
+                    let request = String::from_utf8_lossy(&buffer);
+                  
+                    let response = if request.starts_with("GET / HTTP/1.1") {
+                        // Handle the request for the root path (index.html)
+                        format!("HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n{}", content)
+                    } else if request.starts_with("GET /style.css HTTP/1.1") {
+                        format!("HTTP/1.1 200 OK\r\nContent-Type: text/css\r\n\r\n{}", css_content)
+                    } else {
+                        // Check for custom routes
+                        for route in custom_routes.iter() {
+                    if request.starts_with(&format!("GET {} HTTP/1.1", route.path)) {
+                        let mut response = format!(
+                            "HTTP/1.1 200 OK\r\nContent-Type: {}\r\n\r\n{}",
+                            route.content_type, route.response
+                        );
+
+                        // Check if the custom route has a CSS file
+                        if let Some(css_content) = route.include_css() {
+                            // Inject the CSS content into the response using a <style> tag
+                            response = format!(
+                                "{}\r\n\r\n<style type=\"text/css\">\r\n{}\r\n</style>",
+                                response, css_content
+                            );
+                        }
+
+                        return stream.write_all(response.as_bytes()).unwrap();
+                    }
+                }
+         
+                
+                        // Handle other requests (404 Not Found)
+                        format!("HTTP/1.1 404 NOT FOUND\r\n\r\n404 Not Found")
+                    };
                     stream.write_all(response.as_bytes()).unwrap();
                 }
-                Err(e) => println!("Error reading from connection: {}", e),
+                Err(e) => eprintln!("Error reading from connection: {}", e),
             }
         }
 
-        let listener = Arc::new(Mutex::new(
-            TcpListener::bind(format!("{}:{}", self.host, self.port))
-                .expect("Failed to bind to address"),
-        ));
+        let listener = 
+            TcpListener::bind(format!("{}:{}", self.host, self.port)).expect("Failed to bind to address");
         println!("Server listening on http://{}:{}", self.host, self.port);
 
-        let server_handler = thread::spawn({
-            let listener = listener.clone();
+        thread::spawn({
             move || {
-                for stream in listener.lock().unwrap().incoming() {
+                for stream in listener.incoming() {
                     match stream {
                         Ok(stream) => {
                             let content = content.content.clone();
-                            // Spawn a new thread to handle the client
+                            let css_content = style.content.clone();
+                            let custom_routes = custom_routes.clone();
                             thread::spawn(move || {
-                                handle_client(stream, content.clone());
+                                handle_client(stream, content, css_content, custom_routes);
                             });
                         }
                         Err(e) => {
@@ -66,17 +148,51 @@ impl Server {
             std::io::stdin().read_line(&mut prompt).unwrap_or_default();
 
             match prompt.trim() {
+                ".help" => {
+                    println!("{}", "Commands:".green().bold());
+                    println!("{}", ".stop - Stop the server".yellow());
+                    println!("{}", ".info - Get server info".yellow());
+                }
                 ".stop" => {
                     println!("Shutting down");
                     std::process::exit(0);
                 }
-                _ => println!(""),
+                ".routes" => {
+                    for route in routes.iter() {
+                        println!("{} - {}", route.path.bold().green(), route.content_type.bold().yellow());
+                    }
+                }
+                ".info" => {
+                    println!("Server listening on http://{}:{}", self.host, self.port);
+                }
+                _ => println!("{}{}", "Unknown Command: ".red().bold(), prompt.trim().red())
             }
         }
     }
 }
+fn load_css_from_file(style_path: &str) -> String {
+    match fs::read_to_string(style_path) {
+        Ok(css) => css,
+        Err(e) => {
+            eprintln!("Error reading CSS file: {}", e);
+            "/* Error reading CSS file */".to_string()
+        }
+    }
+}
 
+impl Debug for Server {
+    fn debug(&self) {
+        println!("Server {{ host: {}, port: {} }}", self.host, self.port)
+    }
+}
 impl ServerResponse {
+    pub fn new(content: impl Into<String>) -> Self {
+        Self {
+            content: content.into(),
+        }
+    }
+}
+impl StyleResponse {
     pub fn new(content: impl Into<String>) -> Self {
         Self {
             content: content.into(),
