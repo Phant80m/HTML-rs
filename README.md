@@ -3,47 +3,31 @@ Simple rust library to write and server html directly from a program
 
 ## Example
 ```rust
+use libwizard::prelude::*;
+
 fn main() {
-    let body = body(
-        /title
-        "RustHTML",
-        //body
-        div(
-            Some("Example-Class"),
-            Some(h1(
-                Some("Example-Class"),
-                "Fat",
-                Some(h1(Some("Example-Class"),
-                    "rat",
-                    Some(h1(Some("Example-Class"),a(Some("Example-Class"), "https://example.com", "example", Some("color: white;")).as_str(),None ,None )),
-                Some("color: orange;"))),
-                Some("color: red; background: black;"),
-            )),
-            Some(
-                div(None,
-                    Some(img(Some("image"),"example-image-src", Some("border-radius: 15px;") ,None ,None )),
-                None, None)),
-            
-            None
+    let server = Server::new("127.0.0.1", 8080);
+    let custom_routes = vec![
+        CustomRoutes::new(
+            "/about",
+            "text/html",
+            include_html("./about.html"),
+            Some("./about.css"),
         ),
-        // stylesheet
-        Some("
-            body {
-                background-color: red;
-            }
-            h1 {
-                background-color: white;
-            }
-            
-            .Example-Class {
-            }
-            "),
-        Some(script("document.body.style.backgroundColor = 'orange';"))
+        CustomRoutes::new(
+            "/api",
+            "application/json",
+            "{\"name\": \"John\", \"age\": 30}",
+            None::<String>,
+        ),
+    ];
+
+    server.start(
+        ServerResponse::new(include_html("./index.html")),
+        StyleResponse::new("./style.css"),
+        custom_routes,
+        Custom404::new(include_html("./404.html")),
     );
-    // Serve the website with built in http server
-    HTML::start(body, "127.0.0.1", "8080");
-    // build the website
-    HTML::build(body)
 }
 
 ```

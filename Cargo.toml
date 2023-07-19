@@ -1,6 +1,6 @@
 [package]
 name = "libwizard"
-version = "0.1.1"
+version = "0.1.3"
 edition = "2021"
 description = "A crate for creating a simple http web server or a (somewhat static) API"
 license = "MIT"
