@@ -1,8 +1,17 @@
 [package]
 name = "libwizard"
-version = "0.2.0"
+version = "0.1.1"
 edition = "2021"
-
+description = "A crate for creating a simple http web server or a (somewhat static) API"
+license = "MIT"
+repository = "https://github.com/Phant80m/HTML-rs/"
+readme = "README.md"
+keywords = ["api", "http", "web"]
+categories = ["text-processing"]
+authors = ["Nicholas Samuels noreply@mail.com"]
+exclude = [
+    "/src/main.rs",
+]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]

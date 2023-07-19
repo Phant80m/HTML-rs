@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":[["a",""],["body",""],["div",""],["h1",""],["h2",""],["h3",""],["img",""],["include_html",""],["script",""]],"mod":[["rust_to_html",""]],"struct":[["CustomRoutes",""],["Server",""],["ServerResponse",""],["StyleResponse",""]],"trait":[["Debug",""]]};

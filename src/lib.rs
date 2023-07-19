@@ -1,4 +1,6 @@
+pub mod prelude;
 pub mod rust_to_html;
+use owo_colors::OwoColorize;
 use std::{
     fs::{self, File},
     io::{Read, Write},
@@ -6,18 +8,15 @@ use std::{
     path::Path,
     thread,
 };
-use owo_colors::OwoColorize;
 
 pub trait Debug {
     fn debug(&self);
 }
-    
 
 pub struct Server {
     host: String,
     port: u32,
 }
-
 
 pub struct ServerResponse {
     content: String,
@@ -25,14 +24,28 @@ pub struct ServerResponse {
 pub struct StyleResponse {
     content: String,
 }
+pub struct Custom404 {
+    content: String,
+}
 #[derive(Clone)]
 pub struct CustomRoutes {
     pub path: String,
     pub content_type: String,
     pub response: String,
-    pub styles: Option<String>
+    pub styles: Option<String>,
 }
-
+impl Custom404 {
+    pub fn new(content: impl Into<String>) -> Self {
+        Self {
+            content: content.into(),
+        }
+    }
+    pub fn default() -> Self {
+        Self {
+            content: "404 page not found!".to_string(),
+        }
+    }
+}
 
 impl CustomRoutes {
     pub fn new(
@@ -51,7 +64,6 @@ impl CustomRoutes {
 
     pub fn include_css(&self) -> Option<String> {
         if let Some(styles) = &self.styles {
-            // Load the CSS from the file and return it
             match fs::read_to_string(styles) {
                 Ok(css) => Some(css),
                 Err(e) => {
@@ -60,12 +72,10 @@ impl CustomRoutes {
                 }
             }
         } else {
-            // No CSS file specified, return None
             None
         }
     }
 }
-
 impl Server {
     pub fn new(host: impl Into<String>, port: u32) -> Self {
         Self {
@@ -74,20 +84,39 @@ impl Server {
         }
     }
 
-    pub fn start(&self, content: ServerResponse, style: StyleResponse, custom_routes: Vec<CustomRoutes>,) {
+    pub fn start(
+        &self,
+        content: ServerResponse,
+        style: StyleResponse,
+        custom_routes: Vec<CustomRoutes>,
+        custom_404: Custom404,
+    ) {
+        let custom404 = custom_404.content.clone();
         let routes = custom_routes.clone();
-        fn handle_client(mut stream: TcpStream, content: String, style: String, custom_routes: Vec<CustomRoutes>,) {
+        fn handle_client(
+            mut stream: TcpStream,
+            content: String,
+            style: String,
+            custom_routes: Vec<CustomRoutes>,
+            custom_404: String,
+        ) {
             let mut buffer = [0; 1024];
-            let css_content = load_css_from_file(&style);
+            let css_content = include_css(&style);
             match stream.read(&mut buffer) {
                 Ok(_) => {
                     let request = String::from_utf8_lossy(&buffer);
-                  
+
                     let response = if request.starts_with("GET / HTTP/1.1") {
                         // Handle the request for the root path (index.html)
-                        format!("HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n{}", content)
+                        format!(
+                            "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n{}",
+                            content
+                        )
                     } else if request.starts_with("GET /style.css HTTP/1.1") {
-                        format!("HTTP/1.1 200 OK\r\nContent-Type: text/css\r\n\r\n{}", css_content)
+                        format!(
+                            "HTTP/1.1 200 OK\r\nContent-Type: text/css\r\n\r\n{}",
+                            css_content
+                        )
                     } else {
                         // Check for custom routes
                         for route in custom_routes.iter() {
@@ -119,9 +148,9 @@ impl Server {
                                 }
                             }
                         }
-                
+
                         // Handle other requests (404 Not Found)
-                        format!("HTTP/1.1 404 NOT FOUND\r\n\r\n404 Not Found")
+                        format!("HTTP/1.1 404 NOT FOUND\r\n\r\n{}", custom_404)
                     };
                     stream.write_all(response.as_bytes()).unwrap();
                 }
@@ -129,8 +158,8 @@ impl Server {
             }
         }
 
-        let listener = 
-            TcpListener::bind(format!("{}:{}", self.host, self.port)).expect("Failed to bind to address");
+        let listener = TcpListener::bind(format!("{}:{}", self.host, self.port))
+            .expect("Failed to bind adress!");
         println!("Server listening on http://{}:{}", self.host, self.port);
 
         thread::spawn({
@@ -141,8 +170,15 @@ impl Server {
                             let content = content.content.clone();
                             let css_content = style.content.clone();
                             let custom_routes = custom_routes.clone();
+                            let custom404 = custom404.clone();
                             thread::spawn(move || {
-                                handle_client(stream, content, css_content, custom_routes);
+                                handle_client(
+                                    stream,
+                                    content,
+                                    css_content,
+                                    custom_routes,
+                                    custom404,
+                                );
                             });
                         }
                         Err(e) => {
@@ -168,23 +204,31 @@ impl Server {
                 }
                 ".routes" => {
                     for route in routes.iter() {
-                        println!("{} - {}", route.path.bold().green(), route.content_type.bold().yellow());
+                        println!(
+                            "{} - {}",
+                            route.path.bold().green(),
+                            route.content_type.bold().yellow()
+                        );
                     }
                 }
                 ".info" => {
                     println!("Server listening on http://{}:{}", self.host, self.port);
                 }
-                _ => println!("{}{}", "Unknown Command: ".red().bold(), prompt.trim().red())
+                _ => println!(
+                    "{}{}",
+                    "Unknown Command: ".red().bold(),
+                    prompt.trim().red()
+                ),
             }
         }
     }
 }
-fn load_css_from_file(style_path: &str) -> String {
+fn include_css(style_path: &str) -> String {
     match fs::read_to_string(style_path) {
         Ok(css) => css,
         Err(e) => {
             eprintln!("Error reading CSS file: {}", e);
-            "/* Error reading CSS file */".to_string()
+            "Error reading CSS file".to_string()
         }
     }
 }
@@ -219,12 +263,19 @@ pub fn include_html(path: impl Into<String> + std::convert::AsRef<std::path::Pat
                 eprintln!("Error reading file: {}", error);
             }
 
-            // Print the file contents
             return file_contents;
         }
         Err(e) => {
             eprintln!("Failed to read file {:?}", e);
-            return String::from("Error!");
+            return format!(
+                "
+                <div style='text-align: center; font-family: sans-serif;'>
+                    <h1 style='margin: auto; background: red; border-radius: 5px; padding: 5px; color: white;'>Error reading your file!</h1>
+                    <h2>Cannot find {}<br></h2>
+                    <p>{}</p>
+                </div>",
+                &binding, e,
+            );
         }
     }
 }
