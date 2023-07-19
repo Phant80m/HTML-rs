@@ -1,4 +1,4 @@
-use libwizard::{include_html, Server, ServerResponse, StyleResponse, Debug, CustomRoutes};
+use libwizard::{include_html, Server, ServerResponse, StyleResponse, CustomRoutes};
 
 fn main() {
     let server = Server::new("127.0.0.1", 8080);
@@ -9,12 +9,16 @@ fn main() {
             include_html("./about.html"),
             Some("./about.css"),
         ),
+        CustomRoutes::new(
+            "/api/main",
+            "application/json",
+            "Hello",
+            Some(""))
     ];
     
     
     let response = ServerResponse::new(include_html("./index.html"));
     let style = StyleResponse::new("./style.css");
-    server.debug();
     server.start(response, style, custom_routes);
    
 }

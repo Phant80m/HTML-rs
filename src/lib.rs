@@ -91,25 +91,34 @@ impl Server {
                     } else {
                         // Check for custom routes
                         for route in custom_routes.iter() {
-                    if request.starts_with(&format!("GET {} HTTP/1.1", route.path)) {
-                        let mut response = format!(
-                            "HTTP/1.1 200 OK\r\nContent-Type: {}\r\n\r\n{}",
-                            route.content_type, route.response
-                        );
-
-                        // Check if the custom route has a CSS file
-                        if let Some(css_content) = route.include_css() {
-                            // Inject the CSS content into the response using a <style> tag
-                            response = format!(
-                                "{}\r\n\r\n<style type=\"text/css\">\r\n{}\r\n</style>",
-                                response, css_content
-                            );
+                            if request.starts_with(&format!("GET {} HTTP/1.1", route.path)) {
+                                let response = match &route.content_type[..] {
+                                    "text/plain" => format!(
+                                        "HTTP/1.1 200 OK\r\nContent-Type: {}\r\n\r\n{}",
+                                        route.content_type, route.response
+                                    ),
+                                    "application/json" => format!(
+                                        "HTTP/1.1 200 OK\r\nContent-Type: {}\r\n\r\n{}",
+                                        route.content_type, route.response
+                                    ),
+                                    _ => format!(
+                                        "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n{}",
+                                        route.response
+                                    ),
+                                };
+                                // Check if the custom route has a CSS file
+                                if let Some(css_content) = &route.styles {
+                                    // Inject the CSS content into the response using a <style> tag
+                                    let styled_response = format!(
+                                        "{}\r\n\r\n<style type=\"text/css\">\r\n{}\r\n</style>",
+                                        response, css_content
+                                    );
+                                    return stream.write_all(styled_response.as_bytes()).unwrap();
+                                } else {
+                                    return stream.write_all(response.as_bytes()).unwrap();
+                                }
+                            }
                         }
-
-                        return stream.write_all(response.as_bytes()).unwrap();
-                    }
-                }
-         
                 
                         // Handle other requests (404 Not Found)
                         format!("HTTP/1.1 404 NOT FOUND\r\n\r\n404 Not Found")
@@ -218,105 +227,4 @@ pub fn include_html(path: impl Into<String> + std::convert::AsRef<std::path::Pat
             return String::from("Error!");
         }
     }
-}
-pub fn body(title: &str, child: String, style: Option<&str>, script: Option<String>) -> String {
-    format!(
-        "{}{}{}{} {} {} {} {}{}{}\n{}{}",
-        r#"
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=, initial-scale=">
-"#,
-        "    <title>",
-        title,
-        "</title>",
-        "\n<style>\n",
-        style.unwrap_or_default(),
-        "\n</style>",
-        "
-</head>
-<body>",
-        child,
-        "
-        <script>",
-        script.unwrap_or_default(),
-        "</script>
-</body>
-</html>
-"
-    )
-}
-pub fn h1(class: Option<&str>, value: &str, child: Option<String>, style: Option<&str>) -> String {
-    format!(
-        "\n    <h1 class='{}' style='{}'>{}{}</h1>",
-        class.unwrap_or_default(),
-        style.unwrap_or_default(),
-        value,
-        child.unwrap_or_default()
-    )
-}
-pub fn h2(class: Option<&str>, value: &str, child: Option<String>, style: Option<&str>) -> String {
-    format!(
-        "\n    <h2 class='{}' style='{}'>{}{}</h2>",
-        class.unwrap_or_default(),
-        style.unwrap_or_default(),
-        value,
-        child.unwrap_or_default()
-    )
-}
-pub fn h3(class: Option<&str>, value: &str, child: Option<String>, style: Option<&str>) -> String {
-    format!(
-        "\n    <h3 class='{}' style='{}'>{}{}</h3>",
-        class.unwrap_or_default(),
-        style.unwrap_or_default(),
-        value,
-        child.unwrap_or_default()
-    )
-}
-pub fn div(
-    class: Option<&str>,
-    child: Option<String>,
-    child2: Option<String>,
-    style: Option<&str>,
-) -> String {
-    format!(
-        "\n    <div class='{}' style='{}'>{}\n    {}\n    </div>",
-        class.unwrap_or_default(),
-        style.unwrap_or_default(),
-        child.unwrap_or_default(),
-        child2.unwrap_or_default()
-    )
-}
-
-pub fn img(
-    class: Option<&str>,
-    src: &str,
-    style: Option<&str>,
-    width: Option<&str>,
-    height: Option<&str>,
-) -> String {
-    let w: Option<String> = Some(format!("width={}", width.unwrap_or("auto")));
-    let h: Option<String> = Some(format!("height={}", height.unwrap_or("auto")));
-    format!(
-        "\n    <img class='{}' src='{}' style='{}', {}, {}",
-        class.unwrap_or_default(),
-        src,
-        style.unwrap_or_default(),
-        w.unwrap_or_default(),
-        h.unwrap_or_default()
-    )
-}
-pub fn a(class: Option<&str>, href: &str, value: &str, style: Option<&str>) -> String {
-    format!(
-        "\n    <a class='{}' href='{}', style='{}'>{}</a>",
-        class.unwrap_or_default(),
-        href,
-        style.unwrap_or_default(),
-        value
-    )
-}
-pub fn script(script: &str) -> String {
-    script.to_string()
 }
